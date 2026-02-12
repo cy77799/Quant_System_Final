@@ -90,7 +90,7 @@ class UniversalBacktester:
         for ticker, qty in self.positions.items():
             bar = self._get_bar(ticker, date, prices_dict)
             if bar is not None:
-                value += qty * bar['Close']
+                value += qty * bar["Close"]
         return value
 
     def _process_trade(self, date, ticker, qty, price):
@@ -129,7 +129,7 @@ class UniversalBacktester:
             bar = self._get_bar(order.ticker, date, prices_dict)
             if bar is None or order.stop_loss is None:
                 continue
-            if bar['Low'] <= order.stop_loss:
+            if bar["Low"] <= order.stop_loss:
                 qty = order.quantity if order.quantity != 0 else -self.positions.get(order.ticker, 0)
                 self._process_trade(date, order.ticker, qty, order.stop_loss)
 
@@ -145,7 +145,7 @@ class UniversalBacktester:
                 bar = self._get_bar(ticker, date, prices_dict)
                 if bar is None:
                     continue
-                price = bar['Close']
+                price = bar["Close"]
                 current_qty = self.positions.get(ticker, 0)
                 current_value = current_qty * price
                 target_value = portfolio_value * target_weight
@@ -160,7 +160,7 @@ class UniversalBacktester:
             bar = self._get_bar(order.ticker, date, prices_dict)
             if bar is None:
                 continue
-            price = bar['Close']
+            price = bar["Close"]
             self._process_trade(date, order.ticker, order.quantity, price)
 
     def run(self, strategy: BaseStrategy, prices_dict, start_date, end_date):
@@ -187,7 +187,7 @@ class PerformanceAnalyzer:
     def __init__(self, risk_free_rate=0.02):
         self.risk_free_rate = risk_free_rate
 
-    def analyze(self, equity_curve: pd.DataFrame, benchmark_prices: Optional[pd.Series] = None):
+    def analyze(self, equity_curve: pd.DataFrame, benchmark_prices: Optional[pd.Series] = None, output_dir=None):
         equity_curve = equity_curve.set_index("Date")
         returns = equity_curve["Equity"].pct_change().dropna()
 
@@ -225,6 +225,11 @@ class PerformanceAnalyzer:
             metrics["Information Ratio"] = info_ratio
 
         rolling = self._rolling_metrics(equity_curve)
+
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            pd.DataFrame([metrics]).to_csv(os.path.join(output_dir, "performance_metrics.csv"), index=False)
+            rolling.to_csv(os.path.join(output_dir, "rolling_metrics.csv"))
 
         return metrics, rolling
 
