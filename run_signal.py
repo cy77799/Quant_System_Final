@@ -9,8 +9,8 @@ from strategy_long_term import LongTermStrategy
 # ==========================================
 # 📲 Telegram 配置 (請填入你的資料)
 # ==========================================
-TG_TOKEN = "8461210708:AAEyF-0EZGyQ1Gp_ll8aegqvaQGNxTP0ZlI"
-TG_CHAT_ID = "831398266"
+TG_TOKEN = ""
+TG_CHAT_ID = ""
 
 def send_telegram_message(message):
     if "YOUR_" in TG_TOKEN:
