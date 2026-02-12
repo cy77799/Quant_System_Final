@@ -40,8 +40,11 @@ class LongTermStrategy(BaseStrategy):
         current_dt = pd.to_datetime(current_date)
 
         sector_map = {}
-        if fundamentals_df is not None and "Ticker" in fundamentals_df.columns and "Sector" in fundamentals_df.columns:
-            sector_map = dict(zip(fundamentals_df["Ticker"], fundamentals_df["Sector"]))
+        if fundamentals_df is not None and "Ticker" in fundamentals_df.columns:
+            sector_map = dict(zip(
+                fundamentals_df["Ticker"],
+                fundamentals_df.get("Sector", pd.Series(["Unknown"] * len(fundamentals_df)))
+            ))
 
         for ticker, df in universe_prices.items():
             if current_dt not in df.index:
