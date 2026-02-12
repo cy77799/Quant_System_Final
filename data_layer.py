@@ -18,15 +18,12 @@ class Config:
     FAILED_FILE = os.path.join(DATA_DIR, "failed_tickers.csv")
 
     CACHE_DAYS = 7
-
     EXTRA_ETFS = ["SPY", "QQQ", "IWM", "VTI", "TLT", "GLD"]
 
     START_DATE = "2015-01-01"
     END_DATE = None
 
-    # ✅ 下載線程數調低
     MAX_WORKERS = 3
-
     REQUEST_TIMEOUT = 10
     RETRY = 5
     SLEEP_BETWEEN_RETRIES = 1.0
@@ -129,6 +126,18 @@ class PriceDownloader:
     def __init__(self):
         os.makedirs(Config.PRICES_DIR, exist_ok=True)
 
+    def _normalize_yf_columns(self, df, ticker):
+        # ✅ yfinance 會回 MultiIndex (Price, Ticker)
+        if isinstance(df.columns, pd.MultiIndex):
+            if ticker in df.columns.get_level_values(1):
+                df = df.xs(ticker, axis=1, level=1)
+            else:
+                df.columns = df.columns.get_level_values(0)
+
+        # 確保單層欄位
+        df.columns = [str(c) for c in df.columns]
+        return df
+
     def _download_one(self, ticker):
         for i in range(Config.RETRY):
             try:
@@ -138,13 +147,14 @@ class PriceDownloader:
                     end=Config.END_DATE,
                     auto_adjust=True,
                     progress=False,
-                    threads=False  # ✅ 禁用 yfinance 自己的 threads
+                    threads=False
                 )
-
-                time.sleep(0.3)  # ✅ 降速，避免被封
+                time.sleep(0.3)
 
                 if df.empty:
                     continue
+
+                df = self._normalize_yf_columns(df, ticker)
 
                 required = {"Close", "High", "Low", "Volume"}
                 if not required.issubset(set(df.columns)):
