@@ -19,15 +19,16 @@ class Config:
 
     CACHE_DAYS = 7
 
-    # 額外 ETF（benchmark/對沖）
     EXTRA_ETFS = ["SPY", "QQQ", "IWM", "VTI", "TLT", "GLD"]
 
     START_DATE = "2015-01-01"
     END_DATE = None
 
-    MAX_WORKERS = 10
+    # ✅ 下載線程數調低
+    MAX_WORKERS = 3
+
     REQUEST_TIMEOUT = 10
-    RETRY = 3
+    RETRY = 5
     SLEEP_BETWEEN_RETRIES = 1.0
 
 
@@ -84,6 +85,7 @@ class UniverseProvider:
                 df["Ticker"] = df["Ticker"].apply(self._normalize_ticker)
                 df["Type"] = "Stock"
                 df = df.dropna(subset=["Ticker"]).drop_duplicates(subset=["Ticker"])
+
                 cols = ["Ticker", "Sector", "Industry", "Type"]
                 return df[cols].copy()
             except Exception as e:
@@ -113,7 +115,6 @@ class UniverseProvider:
             })
             df = pd.concat([df, extra], ignore_index=True)
 
-        # ✅ 強制補 Sector/Industry
         df["Sector"] = df["Sector"].fillna("Unknown")
         df["Industry"] = df["Industry"].fillna("Unknown")
 
@@ -129,24 +130,31 @@ class PriceDownloader:
         os.makedirs(Config.PRICES_DIR, exist_ok=True)
 
     def _download_one(self, ticker):
-        try:
-            df = yf.download(
-                ticker,
-                start=Config.START_DATE,
-                end=Config.END_DATE,
-                auto_adjust=True,
-                progress=False
-            )
-            if df.empty:
-                return ticker, None
+        for i in range(Config.RETRY):
+            try:
+                df = yf.download(
+                    ticker,
+                    start=Config.START_DATE,
+                    end=Config.END_DATE,
+                    auto_adjust=True,
+                    progress=False,
+                    threads=False  # ✅ 禁用 yfinance 自己的 threads
+                )
 
-            required = {"Close", "High", "Low", "Volume"}
-            if not required.issubset(set(df.columns)):
-                return ticker, None
+                time.sleep(0.3)  # ✅ 降速，避免被封
 
-            return ticker, df
-        except Exception:
-            return ticker, None
+                if df.empty:
+                    continue
+
+                required = {"Close", "High", "Low", "Volume"}
+                if not required.issubset(set(df.columns)):
+                    continue
+
+                return ticker, df
+            except Exception:
+                time.sleep(Config.SLEEP_BETWEEN_RETRIES)
+
+        return ticker, None
 
     def download_all(self, tickers):
         results = {}
