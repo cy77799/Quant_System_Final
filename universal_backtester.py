@@ -4,21 +4,15 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 
-# ==========================================
-# 📋 1. 標準化指令格式
-# ==========================================
 @dataclass
 class Order:
     ticker: str
-    order_type: str  # 'MARKET', 'TARGET_WEIGHT', 'STOP_LIMIT'
+    order_type: str
     quantity: float = 0.0
     target_weight: Optional[float] = None
     stop_loss: Optional[float] = None
 
 
-# ==========================================
-# 🧠 2. 策略介面 (Strategy Interface)
-# ==========================================
 class BaseStrategy(ABC):
     def __init__(self, name: str):
         self.name = name
@@ -28,9 +22,6 @@ class BaseStrategy(ABC):
         pass
 
 
-# ==========================================
-# ⚙️ 3. 成本模型 (Transaction Cost Model)
-# ==========================================
 class TransactionCostModel:
     def __init__(self, commission_rate=0.001, slippage=0.001, min_commission=1.0):
         self.commission_rate = commission_rate
@@ -44,17 +35,8 @@ class TransactionCostModel:
         return price * (1 + self.slippage) if qty > 0 else price * (1 - self.slippage)
 
 
-# ==========================================
-# 🏭 4. 通用回測引擎 (Universal Backtester)
-# ==========================================
 class UniversalBacktester:
-    def __init__(
-        self,
-        initial_capital=100000,
-        calendar_ticker="SPY",
-        allow_fractional=True,
-        cost_model=None
-    ):
+    def __init__(self, initial_capital=100000, calendar_ticker="SPY", allow_fractional=True, cost_model=None):
         self.initial_capital = initial_capital
         self.calendar_ticker = calendar_ticker
         self.allow_fractional = allow_fractional
@@ -75,10 +57,7 @@ class UniversalBacktester:
         return pd.DatetimeIndex(union_idx)
 
     def _align_prices(self, prices_dict, trading_days):
-        aligned = {}
-        for ticker, df in prices_dict.items():
-            aligned[ticker] = df.reindex(trading_days).ffill()
-        return aligned
+        return {t: df.reindex(trading_days).ffill() for t, df in prices_dict.items()}
 
     def _get_bar(self, ticker, date, prices_dict):
         if ticker in prices_dict and date in prices_dict[ticker].index:
@@ -160,19 +139,16 @@ class UniversalBacktester:
             bar = self._get_bar(order.ticker, date, prices_dict)
             if bar is None:
                 continue
-            price = bar["Close"]
-            self._process_trade(date, order.ticker, order.quantity, price)
+            self._process_trade(date, order.ticker, order.quantity, bar["Close"])
 
     def run(self, strategy: BaseStrategy, prices_dict, start_date, end_date):
         print(f"🚀 啟動回測引擎: {strategy.name}")
-
         trading_days = self._build_trading_days(prices_dict, start_date, end_date)
         prices_dict = self._align_prices(prices_dict, trading_days)
 
         for date in trading_days:
             portfolio_value = self._calc_portfolio_value(date, prices_dict)
             self.equity_curve.append({"Date": date, "Equity": portfolio_value})
-
             orders = strategy.on_bar(date, prices_dict, portfolio_value)
             if orders:
                 self._execute_orders(orders, date, prices_dict, portfolio_value)
@@ -180,14 +156,11 @@ class UniversalBacktester:
         return pd.DataFrame(self.equity_curve)
 
 
-# ==========================================
-# 📊 5. 績效分析引擎 (Performance Analyzer + Rolling)
-# ==========================================
 class PerformanceAnalyzer:
     def __init__(self, risk_free_rate=0.02):
         self.risk_free_rate = risk_free_rate
 
-    def analyze(self, equity_curve: pd.DataFrame, benchmark_prices: Optional[pd.Series] = None, output_dir=None):
+    def analyze(self, equity_curve: pd.DataFrame, benchmark_prices: Optional[pd.Series] = None):
         equity_curve = equity_curve.set_index("Date")
         returns = equity_curve["Equity"].pct_change().dropna()
 
@@ -212,9 +185,7 @@ class PerformanceAnalyzer:
 
         if benchmark_prices is not None:
             benchmark_returns = benchmark_prices.pct_change().dropna()
-            aligned = returns.align(benchmark_returns, join="inner")
-            strat_ret, bench_ret = aligned[0], aligned[1]
-
+            strat_ret, bench_ret = returns.align(benchmark_returns, join="inner")
             cov = np.cov(strat_ret, bench_ret)[0][1]
             beta = cov / np.var(bench_ret)
             alpha = (strat_ret.mean() * 252) - (self.risk_free_rate + beta * (bench_ret.mean() * 252 - self.risk_free_rate))
@@ -225,27 +196,27 @@ class PerformanceAnalyzer:
             metrics["Information Ratio"] = info_ratio
 
         rolling = self._rolling_metrics(equity_curve)
-
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-            pd.DataFrame([metrics]).to_csv(os.path.join(output_dir, "performance_metrics.csv"), index=False)
-            rolling.to_csv(os.path.join(output_dir, "rolling_metrics.csv"))
-
         return metrics, rolling
+
+    def _rolling_max_drawdown(self, equity, window):
+        def calc_dd(x):
+            s = pd.Series(x)
+            running_max = s.cummax()
+            dd = (s - running_max) / running_max
+            return dd.min()
+        return equity.rolling(window).apply(calc_dd, raw=False)
 
     def _rolling_metrics(self, equity_curve, windows_years=(3, 5)):
         rolling_results = []
-        daily_returns = equity_curve["Equity"].pct_change().dropna()
+        equity = equity_curve["Equity"]
+        daily_returns = equity.pct_change().dropna()
 
         for years in windows_years:
             window = years * 252
-            rolling_cagr = (equity_curve["Equity"] / equity_curve["Equity"].shift(window)) ** (252 / window) - 1
+            rolling_cagr = (equity / equity.shift(window)) ** (252 / window) - 1
             rolling_vol = daily_returns.rolling(window).std() * np.sqrt(252)
             rolling_sharpe = (rolling_cagr - self.risk_free_rate) / rolling_vol
-
-            cumulative = (1 + daily_returns).cumprod()
-            rolling_max = cumulative.rolling(window).max()
-            rolling_dd = (cumulative - rolling_max) / rolling_max
+            rolling_dd = self._rolling_max_drawdown(equity, window)
 
             df = pd.DataFrame({
                 "Rolling_CAGR": rolling_cagr,
