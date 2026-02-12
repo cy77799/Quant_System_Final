@@ -18,10 +18,12 @@ class Config:
     FAILED_FILE = os.path.join(DATA_DIR, "failed_tickers.csv")
 
     CACHE_DAYS = 7
-    EXTRA_ETFS = ["QQQ", "IWM", "VTI", "TLT", "GLD"]
+
+    # 加 SPY / VOO 作 benchmark
+    EXTRA_ETFS = ["SPY", "VOO", "QQQ", "IWM", "VTI", "TLT", "GLD"]
 
     START_DATE = "2015-01-01"
-    END_DATE = None  # None = 今日，避免 look-ahead 可手動鎖定
+    END_DATE = None
 
     MAX_WORKERS = 10
     REQUEST_TIMEOUT = 10
@@ -35,8 +37,11 @@ class Config:
 class UniverseProvider:
     def __init__(self):
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/91.0.4472.124 Safari/537.36"
+            )
         }
 
     def _normalize_ticker(self, ticker):
@@ -60,6 +65,15 @@ class UniverseProvider:
     def _save_cache(self, df):
         os.makedirs(Config.DATA_DIR, exist_ok=True)
         df.to_csv(Config.UNIVERSE_FILE, index=False)
+
+    def _ensure_columns(self, df):
+        if "Sector" not in df.columns:
+            df["Sector"] = "Unknown"
+        if "Industry" not in df.columns:
+            df["Industry"] = "Unknown"
+        if "Type" not in df.columns:
+            df["Type"] = "Stock"
+        return df
 
     def fetch_sp500(self):
         print("📥 抓取 S&P 500 成分股...")
@@ -89,18 +103,17 @@ class UniverseProvider:
                 print(f"⚠️ 抓取失敗 (第 {i+1}/{Config.RETRY})：{e}")
                 time.sleep(Config.SLEEP_BETWEEN_RETRIES)
 
-        # fallback to cache
         cached = self._load_cache()
         if cached is not None:
             print("✅ Wikipedia 抓取失敗，改用本地 cache")
-            return cached
+            return self._ensure_columns(cached)
 
         raise RuntimeError("❌ 無法取得 S&P500 成分股，也找不到 cache")
 
     def build_universe(self, include_extra_etf=True):
         if self._is_cache_valid():
             print("✅ 使用快取 Universe")
-            return self._load_cache()
+            return self._ensure_columns(self._load_cache())
 
         df = self.fetch_sp500()
 
@@ -113,6 +126,7 @@ class UniverseProvider:
             })
             df = pd.concat([df, extra], ignore_index=True)
 
+        df = self._ensure_columns(df)
         self._save_cache(df)
         return df
 
@@ -136,7 +150,6 @@ class PriceDownloader:
             if df.empty:
                 return ticker, None
 
-            # 確保欄位
             required = {"Close", "High", "Low", "Volume"}
             if not required.issubset(set(df.columns)):
                 return ticker, None
@@ -168,16 +181,3 @@ class PriceDownloader:
             if os.path.exists(path):
                 data[t] = pd.read_parquet(path)
         return data
-
-
-# ==========================================
-# 🚀 4. Quick Runner
-# ==========================================
-if __name__ == "__main__":
-    provider = UniverseProvider()
-    universe = provider.build_universe()
-
-    tickers = universe["Ticker"].tolist()
-    downloader = PriceDownloader()
-    prices = downloader.download_all(tickers)
-    print(f"✅ 下載完成，共 {len(prices)} 隻股票")
