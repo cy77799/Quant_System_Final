@@ -82,8 +82,7 @@ def main():
     if not market_check["ok"]:
         target_weights = {}
 
-    # 組合 Telegram 訊息
-        # 組合 Telegram 訊息（清晰分段）
+    # 組合 Telegram 訊息（清晰分段）
     msg = f"📅 {today_str} 長線策略\n"
     msg += f"【市場】{market_check['message']} "
     msg += "✅\n" if market_check["ok"] else "❌\n"
@@ -107,7 +106,6 @@ def main():
         df_res = df_res.sort_values(by="Weight", ascending=False)
         for _, row in df_res.iterrows():
             msg += f"- {row['Ticker']}: {row['Weight']*100:.1f}%\n"
-
 
     send_telegram_message(msg)
 
