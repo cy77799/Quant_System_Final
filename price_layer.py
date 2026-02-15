@@ -47,7 +47,7 @@ class PriceLoader:
         if end:
             df = df[df['date'] <= pd.to_datetime(end)]
 
-        pivot = df.pivot(index='date', columns='Symbol', values='Adj Close')
+        pivot = df.pivot(index='date', columns='Symbol', values='Close')
         return pivot
 
     def load_ohlcv(self, start=None, end=None):
