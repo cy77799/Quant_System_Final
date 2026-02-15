@@ -1,5 +1,6 @@
 import pandas as pd
 import pandas_ta as ta
+from pathlib import Path
 
 class TechnicalIndicator:
     def __init__(self, price_close_df, ohlcv_df=None):
@@ -65,9 +66,27 @@ class TechnicalIndicator:
         self.indicators['VWAP'] = vwap_df
         return vwap_df
 
-    def unified_output(self):
-        """
-        統一輸出：dict of {indicator_name: DataFrame}
-        index=日期，columns=股票
-        """
-        return self.indicators
+    # ✅ 1) cache：每個指標獨立存檔
+    def save_indicators(self, out_dir):
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for name, df in self.indicators.items():
+            df.to_parquet(out_dir / f"{name}.parquet")
+
+    # ✅ 2) unified output：合併成一個 parquet
+    def to_unified_frame(self):
+        frames = []
+        for name, df in self.indicators.items():
+            frames.append(pd.concat({name: df}, axis=1))
+        if not frames:
+            return pd.DataFrame()
+        unified = pd.concat(frames, axis=1)
+        # columns 變成 MultiIndex: (indicator, symbol)
+        return unified
+
+    def save_unified(self, out_path):
+        unified = self.to_unified_frame()
+        out_path = Path(out_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        unified.to_parquet(out_path)
+        return unified
