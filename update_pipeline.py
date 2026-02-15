@@ -1,5 +1,6 @@
 from layers.data_hub import DataHub
 from utils.validation import validate_missing, validate_spikes
+from utils.reporting import append_report
 from pathlib import Path
 
 def run_update():
@@ -18,10 +19,7 @@ def run_update():
     tech.add_adx(14)
     tech.add_vwap()
 
-    # ✅ 指標 cache（每個指標一個檔）
     tech.save_indicators(processed_dir / "indicators")
-
-    # ✅ 統一輸出（單一 parquet）
     tech.save_unified(processed_dir / "indicators_all.parquet")
 
     # 3) 基本面
@@ -38,6 +36,14 @@ def run_update():
         print("Missing warning:", missing)
     if spikes > 0:
         print("Spike warning count:", spikes)
+
+    # ✅ 寫 report
+    report_path = processed_dir / "update_report.csv"
+    append_report(report_path, {
+        "rows_price": len(close_df),
+        "missing_cols": len(missing),
+        "spike_count": spikes
+    })
 
 if __name__ == "__main__":
     run_update()
