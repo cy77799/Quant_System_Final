@@ -1,4 +1,5 @@
 from layers.data_hub import DataHub
+from layers.data_layer import UniverseProvider
 from utils.validation import validate_missing, validate_spikes
 from utils.reporting import append_report
 from pathlib import Path
@@ -8,8 +9,14 @@ def run_update():
     processed_dir = Path(hub.price.config['paths']['processed_data'])
     processed_dir.mkdir(parents=True, exist_ok=True)
 
+    # 0) Universe（S&P500 + EXTRA_ETFS）
+    u_provider = UniverseProvider()
+    universe_df = u_provider.build_universe()
+    tickers = universe_df["Ticker"].dropna().unique().tolist()
+    print(f"✅ Universe Ready: {len(tickers)} tickers")
+
     # 1) 更新價格
-    hub.price.download(force=True)
+    hub.price.download(symbols=tickers, force=True)
     close_df = hub.price.load()
 
     # 2) 技術指標
@@ -22,8 +29,8 @@ def run_update():
     tech.save_indicators(processed_dir / "indicators")
     tech.save_unified(processed_dir / "indicators_all.parquet")
 
-    # 3) 基本面
-    hub.fundamentals.download_quarterly(hub.price.config['universe']['symbols'])
+    # 3) 基本面（用 S&P500 tickers 嘗試過濾）
+    hub.fundamentals.download_quarterly(tickers)
 
     # 4) 宏觀
     hub.macro.download_all()
