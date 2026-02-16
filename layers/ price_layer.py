@@ -1,7 +1,7 @@
 import yfinance as yf
 import pandas as pd
 from pathlib import Path
-from utils.config import load_config
+from config import load_config
 
 class PriceLoader:
     def __init__(self, config=None):
