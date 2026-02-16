@@ -9,9 +9,15 @@ class TechnicalIndicator:
         self.indicators = {}
 
     def add_rsi(self, length=14):
-        rsi = ta.rsi(self.price_close_df, length=length)
-        self.indicators[f'RSI_{length}'] = rsi
-        return rsi
+        rsi_all = []
+        for col in self.price_close_df.columns:
+            rsi = ta.rsi(self.price_close_df[col], length=length)
+            rsi.name = col
+            rsi_all.append(rsi)
+
+        rsi_df = pd.concat(rsi_all, axis=1)
+        self.indicators[f'RSI_{length}'] = rsi_df
+        return rsi_df
 
     def add_bbands(self, length=20, std=2):
         bb = ta.bbands(self.price_close_df, length=length, std=std)
@@ -71,6 +77,9 @@ class TechnicalIndicator:
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         for name, df in self.indicators.items():
+            print(f"[DEBUG] {name} -> {type(df)} | empty={getattr(df, 'empty', None)}")
+            if df is None or (hasattr(df, "empty") and df.empty):
+                raise ValueError(f"Indicator {name} is None/empty")
             df.to_parquet(out_dir / f"{name}.parquet")
 
     # ✅ 2) unified output：合併成一個 parquet
