@@ -15,7 +15,8 @@ DEFAULT_CONFIG = {
             "end_date": "2026-01-01"
         },
         "fundamentals": {
-            "api_key": ""
+            "api_key": "438de359-d321-4ce9-8333-7cdc02afd711",
+            "mapping_file": "data/simfin_mapping.csv"
         },
         "macro": {
             "fred_api_key": ""
