@@ -1,7 +1,7 @@
 from fredapi import Fred
 import pandas as pd
 from pathlib import Path
-from utils.config import load_config
+from config import load_config
 
 class MacroLoader:
     def __init__(self, api_key=None, config=None):
