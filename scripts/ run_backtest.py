@@ -2,8 +2,7 @@ import pandas as pd
 import os
 from datetime import datetime
 
-from data_layer import Config, UniverseProvider, PriceDownloader
-from strategy_long_term import LongTermStrategy
+from engine.pipeline import QuantPipeline
 from universal_backtester import UniversalBacktester, TransactionCostModel, PerformanceAnalyzer
 
 
@@ -12,27 +11,20 @@ def main():
     print("🚀 QUANT SYSTEM: 自動化回測流程啟動")
     print("=" * 60)
 
+    pipeline = QuantPipeline()
+
     # ==========================================
     # Step 1: 數據準備
     # ==========================================
     print("\n[Step 1/4] 正在準備數據...")
 
-    u_provider = UniverseProvider()
-    universe_df = u_provider.build_universe()
-    tickers = universe_df["Ticker"].tolist()
+    universe_df, tickers = pipeline.build_universe()
     print(f"✅ Universe Ready: {len(tickers)} 隻股票")
 
-    downloader = PriceDownloader()
-    existing_files = [f for f in os.listdir(Config.PRICES_DIR) if f.endswith(".parquet")]
-
-    if len(existing_files) < len(tickers) * 0.5:
-        print("⚠️ 發現數據缺失，開始下載/更新數據 (這可能需要幾分鐘)...")
-        downloader.download_all(tickers)
-    else:
-        print(f"✅ 發現現有數據 ({len(existing_files)} files)，跳過下載。")
+    pipeline.ensure_prices(tickers)
 
     print("📥 正在將 Parquet 載入內存...")
-    price_data = downloader.load_prices(tickers)
+    price_data = pipeline.load_prices(tickers)
     print(f"✅ 成功載入 {len(price_data)} 隻股票數據")
 
     if len(price_data) == 0:
@@ -44,11 +36,11 @@ def main():
     # ==========================================
     print("\n[Step 2/4] 初始化長線策略...")
 
-    strategy = LongTermStrategy(
+    strategy = pipeline.init_long_term_strategy(
+        universe_df,
         top_n=15,
         max_sector_count=4,
-        rebalance_freq="Q",
-        fundamentals_df=universe_df
+        rebalance_freq="Q"
     )
     print(f"🧠 策略: {strategy.name} (Top {strategy.top_n}, Freq: {strategy.rebalance_freq})")
 
